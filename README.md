@@ -30,6 +30,7 @@ Example flake input:
             appUrl = "https://nutty.cash";
             network = "bitcoin";
             acceptedMints = [ "https://mint.example.com" ];
+            payoutCreq = "creqA...";
             domains = {
               "example.com" = "cloudflare-zone-id";
             };
@@ -47,7 +48,13 @@ The environment file should contain secrets such as:
 ```env
 CF_TOKEN=your_cloudflare_token
 CDK_MNEMONIC=your seed words here
+PAYOUT_CREQ=creqA... # optional, must be amountless
 ```
+
+If `PAYOUT_CREQ` is set, Nutty will attempt a best-effort payout after receiving ecash by
+sending the wallet's total current balance to that Cashu payment request. The request must be
+amountless so the runtime can provide the balance dynamically. If the payout fails, the paycode
+creation still succeeds and the ecash remains in the wallet so it can be retried later.
 
 For quick local setups, you can also define the values directly in Nix instead
 of using an environment file:

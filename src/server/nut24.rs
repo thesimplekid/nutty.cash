@@ -177,6 +177,34 @@ pub async fn handle_paycode_api(
             }
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Payment redemption failed"}))).into_response();
         }
+
+        if let Some(payout_creq) = state.payout_creq.as_deref() {
+            match PaymentRequest::from_str(payout_creq) {
+                Ok(payout_request) => {
+                    match state.wallet.total_balance().await {
+                        Ok(payout_amount) if payout_amount > Amount::ZERO => {
+                            tracing::info!(amount = %payout_amount, "Attempting configured wallet balance payout");
+                            if let Err(e) = state
+                                .wallet
+                                .pay_request(payout_request, Some(payout_amount))
+                                .await
+                            {
+                                warn!(error = %e, amount = %payout_amount, "Configured payout request payment failed; ecash remains in wallet");
+                            } else {
+                                tracing::info!(amount = %payout_amount, "Configured wallet balance payout succeeded");
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(e) => {
+                            warn!(error = %e, "Failed to read wallet balance for configured payout request");
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!(error = %e, "Configured payout request became invalid at runtime");
+                }
+            }
+        }
     }
 
     // Step 3: Save to DB

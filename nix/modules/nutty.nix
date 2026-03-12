@@ -96,6 +96,17 @@ in
       description = "Accepted Cashu mint base URLs.";
     };
 
+    payoutCreq = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "creqA...";
+      description = ''
+        Optional amountless Cashu payment request used for best-effort payout of
+        newly received ecash. The application sends the wallet's total balance and
+        keeps the ecash in the wallet if the payout attempt fails.
+      '';
+    };
+
     domains = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = { };
@@ -156,6 +167,8 @@ in
         CUSTOM_PRICE_SATS = toString cfg.customPriceSats;
         RANDOM_PRICE_SATS = toString cfg.randomPriceSats;
         SITE_ADDR = siteAddr;
+      } // lib.optionalAttrs (cfg.payoutCreq != null) {
+        PAYOUT_CREQ = cfg.payoutCreq;
       } // lib.optionalAttrs (cfg.cfToken != null) {
         CF_TOKEN = cfg.cfToken;
       } // lib.optionalAttrs (cfg.cdkMnemonic != null) {

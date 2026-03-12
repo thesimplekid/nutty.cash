@@ -1,6 +1,7 @@
 use crate::server::cloudflare::CloudflareClient;
 use crate::server::db::Db;
 use axum::extract::FromRef;
+use cdk::nuts::nut18::PaymentRequest;
 use leptos::prelude::LeptosOptions;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -23,6 +24,7 @@ pub struct AppState {
     pub app_name: String,
     pub default_domain: String,
     pub app_url: String,
+    pub payout_creq: Option<String>,
 }
 
 impl AppState {
@@ -70,6 +72,20 @@ impl AppState {
             .filter(|s| !s.is_empty())
             .collect();
 
+        let payout_creq = std::env::var("PAYOUT_CREQ")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        if let Some(ref payout_creq) = payout_creq {
+            let payout_request = PaymentRequest::from_str(payout_creq)
+                .map_err(|e| format!("Invalid PAYOUT_CREQ: {}", e))?;
+
+            if payout_request.amount.is_some() {
+                return Err("PAYOUT_CREQ must be amountless".into());
+            }
+        }
+
         if accepted_mints.is_empty() {
             return Err("ACCEPTED_MINTS must be set".into());
         }
@@ -105,6 +121,7 @@ impl AppState {
             app_name,
             default_domain,
             app_url,
+            payout_creq,
         })
     }
 }

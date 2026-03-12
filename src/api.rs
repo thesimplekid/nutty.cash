@@ -9,6 +9,8 @@ use bitcoin_payment_instructions::{
 
 use crate::types::{AppConfig, CreatePayCodeRequest, LookupResult, PayCode};
 use leptos::prelude::*;
+#[cfg(feature = "ssr")]
+use std::str::FromStr;
 
 #[server(name = GetAppConfig)]
 pub async fn get_app_config() -> Result<AppConfig, ServerFnError> {
@@ -119,6 +121,7 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
         use crate::server::state::AppState;
         use crate::types::{PayCodeParam, PayCodeParamType, PayCodeStatus};
         use axum::http::HeaderMap;
+        use cdk::nuts::nut18::PaymentRequest;
         use chrono::Utc;
         use tracing::{error, warn};
         use uuid::Uuid;
@@ -205,7 +208,7 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
         };
 
         // Validate token upfront (before any side effects)
-        let validated_token_str = if price_sats > 0 {
+        let validated_token = if price_sats > 0 {
             let token_str = cashu_token_str.unwrap();
             use cdk::nuts::nut00::Token;
             use cdk::nuts::CurrencyUnit;
@@ -244,10 +247,17 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
                 return Err(ServerFnError::new("Username taken (just now)"));
             }
 
-            Some(token_str)
+            Some(token)
         } else {
             None
         };
+
+        let payout_request = state
+            .payout_creq
+            .as_deref()
+            .map(PaymentRequest::from_str)
+            .transpose()
+            .map_err(|e| ServerFnError::new(format!("Invalid payout request: {}", e)))?;
 
         let mut params = Vec::new();
         if let Some(v) = req.lno {
@@ -297,13 +307,13 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
             })?;
 
         // Step 2: Redeem token (DNS exists, rollback on failure)
-        if let Some(token_str) = validated_token_str {
+        if let Some(token) = validated_token {
             use cdk::wallet::ReceiveOptions;
 
             let start = std::time::Instant::now();
             let res = state
                 .wallet
-                .receive(token_str, ReceiveOptions::default())
+                .receive(&token.to_string(), ReceiveOptions::default())
                 .await;
             let duration = start.elapsed();
             tracing::info!(duration_ms = duration.as_millis(), "Cashu token redemption completed");
@@ -318,6 +328,27 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
                     error!(error = %del_err, "Failed to rollback DNS record");
                 }
                 return Err(ServerFnError::new("Payment redemption failed"));
+            }
+
+            if let Some(ref payout_request) = payout_request {
+                match state.wallet.total_balance().await {
+                    Ok(payout_amount) if payout_amount > cdk::Amount::ZERO => {
+                        tracing::info!(amount = %payout_amount, "Attempting configured wallet balance payout");
+                        if let Err(e) = state
+                            .wallet
+                            .pay_request(payout_request.clone(), Some(payout_amount))
+                            .await
+                        {
+                            warn!(error = %e, amount = %payout_amount, "Configured payout request payment failed; ecash remains in wallet");
+                        } else {
+                            tracing::info!(amount = %payout_amount, "Configured wallet balance payout succeeded");
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        warn!(error = %e, "Failed to read wallet balance for configured payout request");
+                    }
+                }
             }
         }
 
