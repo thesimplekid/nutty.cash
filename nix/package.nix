@@ -2,8 +2,10 @@
 , rustPlatform
 , makeBinaryWrapper
 , cargo-leptos
+, wasm-bindgen-cli
 , dart-sass
 , binaryen
+, llvmPackages
 , pkg-config
 , openssl
 , stdenv
@@ -14,12 +16,19 @@ rustPlatform.buildRustPackage rec {
   version = "0.1.0";
 
   src = lib.cleanSource ../.;
-  cargoLock.lockFile = ../Cargo.lock;
+  cargoLock = {
+    lockFile = ../Cargo.lock;
+    outputHashes = {
+      "cashu-0.15.1" = "sha256-rwR+IS72cJTj4x5Mps9OhqJk+Wek2SyZvZHIU3Ounh0=";
+    };
+  };
 
   nativeBuildInputs = [
     cargo-leptos
+    wasm-bindgen-cli
     dart-sass
     binaryen
+    llvmPackages.lld
     pkg-config
     makeBinaryWrapper
   ];

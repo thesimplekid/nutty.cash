@@ -52,7 +52,7 @@ pub fn App() -> impl IntoView {
 
     view! {
         <Stylesheet id="leptos" href=css_href/>
-        <Title text=title/>
+        <Title text=move || title.get()/>
 
         <Router>
             <div class="page-wrapper font-urbanist">
