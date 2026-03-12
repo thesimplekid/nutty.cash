@@ -49,6 +49,20 @@ CF_TOKEN=your_cloudflare_token
 CDK_MNEMONIC=your seed words here
 ```
 
+For quick local setups, you can also define the values directly in Nix instead
+of using an environment file:
+
+```nix
+services.nutty = {
+  enable = true;
+  cfToken = "your_cloudflare_token";
+  cdkMnemonic = "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12";
+};
+```
+
+This is convenient for testing, but it is not secure because the secrets will
+be stored in the Nix store.
+
 The module creates a `nutty` service account, stores runtime state in `/var/lib/nutty`,
 and starts the SSR app on the configured `host` and `port`.
 

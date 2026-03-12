@@ -41,6 +41,28 @@ in
       '';
     };
 
+    cfToken = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "your_cloudflare_token";
+      description = ''
+        Cloudflare API token passed directly to the service environment.
+        This is less secure than `environmentFile` because the value will end
+        up in the Nix store.
+      '';
+    };
+
+    cdkMnemonic = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12";
+      description = ''
+        Wallet mnemonic passed directly to the service environment.
+        This is less secure than `environmentFile` because the value will end
+        up in the Nix store.
+      '';
+    };
+
     appName = lib.mkOption {
       type = lib.types.str;
       default = "Nutty";
@@ -103,8 +125,8 @@ in
         message = "services.nutty.acceptedMints must contain at least one mint URL.";
       }
       {
-        assertion = cfg.environmentFile != null;
-        message = "services.nutty.environmentFile must be set so secrets like CF_TOKEN and CDK_MNEMONIC are provided.";
+        assertion = cfg.environmentFile != null || (cfg.cfToken != null && cfg.cdkMnemonic != null);
+        message = "Set services.nutty.environmentFile, or set both services.nutty.cfToken and services.nutty.cdkMnemonic.";
       }
     ];
 
@@ -134,6 +156,10 @@ in
         CUSTOM_PRICE_SATS = toString cfg.customPriceSats;
         RANDOM_PRICE_SATS = toString cfg.randomPriceSats;
         SITE_ADDR = siteAddr;
+      } // lib.optionalAttrs (cfg.cfToken != null) {
+        CF_TOKEN = cfg.cfToken;
+      } // lib.optionalAttrs (cfg.cdkMnemonic != null) {
+        CDK_MNEMONIC = cfg.cdkMnemonic;
       };
 
       serviceConfig = {
