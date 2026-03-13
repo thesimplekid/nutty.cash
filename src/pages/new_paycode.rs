@@ -181,19 +181,29 @@ pub fn NewPayCodePage() -> impl IntoView {
                 <Show when=move || payment_info.get().is_none() fallback=move || {
                     let (amount, suggested, mints) = payment_info.get().unwrap();
                     view! {
-                        <div class="flex flex-col gap-4 p-4 bg-yellow-100 dark:bg-yellow-900/30 rounded-2xl border border-yellow-200 dark:border-yellow-800">
-                            <h3 class="text-lg font-bold text-yellow-800 dark:text-yellow-200 text-center">"Payment Required"</h3>
-                            <p class="text-sm text-center">
-                                "The address " <span class="font-bold">{suggested}</span> " requires a one-time payment of "
-                                <span class="font-bold">{amount}</span> " sats."
-                            </p>
-                            <div class="text-sm text-center">
-                                <p class="font-semibold">"Accepted Mints"</p>
-                                <ul class="list-none mt-1 space-y-1">
+                        <div class="flex flex-col gap-6 p-8 bg-white/30 dark:bg-white/5 rounded-2xl border-2 border-text-primary/10 dark:border-white/10 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 shadow-2xl">
+                            <div class="flex flex-col gap-2">
+                                <h3 class="text-xl font-black text-text-primary text-center">"Payment Required"</h3>
+                                <p class="text-sm text-center text-text-secondary">
+                                    "The address " <span class="font-bold text-text-primary">{suggested}</span> " requires a one-time payment of "
+                                    <span class="font-bold text-text-primary">{amount}</span> " sats."
+                                </p>
+                            </div>
+                            <div class="flex flex-col gap-3">
+                                <p class="font-bold text-xs uppercase tracking-wider text-text-secondary text-center">"Accepted Mints"</p>
+                                <div class="max-h-48 overflow-y-auto px-2 flex flex-col gap-3">
                                     {mints.into_iter().map(|mint| view! {
-                                        <li class="text-xs break-all text-yellow-700 dark:text-yellow-300">{mint}</li>
+                                        <div class="group relative flex flex-col p-4 bg-black/5 dark:bg-white/5 rounded-xl border border-border-color hover:border-text-primary/30 transition-all overflow-hidden shadow-sm hover:shadow-md">
+                                            <div class="flex items-center gap-2 mb-2">
+                                                <div class="w-2 h-2 rounded-full bg-text-primary/20 group-hover:bg-text-primary transition-colors"></div>
+                                                <span class="text-[10px] font-black uppercase tracking-widest text-text-secondary">"Cashu Mint"</span>
+                                            </div>
+                                            <span class="text-xs break-words font-medium text-text-primary leading-normal">
+                                                {mint}
+                                            </span>
+                                        </div>
                                     }).collect::<Vec<_>>()}
-                                </ul>
+                                </div>
                             </div>
                             <Input
                                 label="Paste Cashu Token"

@@ -226,8 +226,8 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
             let token_value = token
                 .value()
                 .map_err(|e| ServerFnError::new(format!("Invalid token value: {}", e)))?;
-            if token_value < Amount::from(price_sats) {
-                return Err(ServerFnError::new("Insufficient amount"));
+            if token_value != Amount::from(price_sats) {
+                return Err(ServerFnError::new("Incorrect amount"));
             }
 
             let mint_url = token

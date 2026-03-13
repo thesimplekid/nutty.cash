@@ -114,8 +114,8 @@ pub async fn handle_paycode_api(
         }
 
         let val = token.value().unwrap_or(Amount::ZERO);
-        if val < Amount::from(price_sats) {
-            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Insufficient amount"}))).into_response();
+        if val != Amount::from(price_sats) {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Incorrect amount"}))).into_response();
         }
 
         let mint_url = token.mint_url().map(|u| u.to_string()).unwrap_or_default();
