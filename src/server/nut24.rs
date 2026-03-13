@@ -213,15 +213,44 @@ pub async fn handle_address_api(
             match PaymentRequest::from_str(payout_creq) {
                 Ok(payout_request) => {
                     match wallet.total_balance().await {
-                        Ok(payout_amount) if payout_amount > Amount::ZERO => {
-                            tracing::info!(mint = %mint_url, amount = %payout_amount, "Attempting configured wallet balance payout");
-                            if let Err(e) = wallet
-                                .pay_request(payout_request, Some(payout_amount))
-                                .await
-                            {
-                                warn!(mint = %mint_url, error = %e, amount = %payout_amount, "Configured payout request payment failed; ecash remains in wallet");
-                            } else {
-                                tracing::info!(mint = %mint_url, amount = %payout_amount, "Configured wallet balance payout succeeded");
+                        Ok(total_balance) if total_balance > Amount::ZERO => {
+                            match wallet.get_unspent_proofs().await {
+                                Ok(proofs) => match wallet.get_proofs_fee(&proofs).await {
+                                    Ok(fee) => {
+                                        let fee = fee.total;
+                                        if total_balance > fee {
+                                            let payout_amount = total_balance - fee;
+                                            tracing::info!(
+                                                mint = %mint_url,
+                                                balance = %total_balance,
+                                                fee = %fee,
+                                                amount = %payout_amount,
+                                                "Attempting configured wallet balance payout"
+                                            );
+                                            if let Err(e) = wallet
+                                                .pay_request(payout_request, Some(payout_amount))
+                                                .await
+                                            {
+                                                warn!(mint = %mint_url, error = %e, amount = %payout_amount, "Configured payout request payment failed; ecash remains in wallet");
+                                            } else {
+                                                tracing::info!(mint = %mint_url, amount = %payout_amount, "Configured wallet balance payout succeeded");
+                                            }
+                                        } else {
+                                            warn!(
+                                                mint = %mint_url,
+                                                balance = %total_balance,
+                                                fee = %fee,
+                                                "Insufficient balance to cover fees for configured payout"
+                                            );
+                                        }
+                                    }
+                                    Err(e) => {
+                                        warn!(mint = %mint_url, error = %e, "Failed to calculate payout fee");
+                                    }
+                                },
+                                Err(e) => {
+                                    warn!(mint = %mint_url, error = %e, "Failed to get unspent proofs for payout");
+                                }
                             }
                         }
                         Ok(_) => {}
