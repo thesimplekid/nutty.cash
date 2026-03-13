@@ -1,7 +1,7 @@
-use crate::types::{PayCodeParam, PayCodeParamType};
+use crate::types::{AddressParam, AddressParamType};
 use url::Url;
 
-pub fn create_bip21(params: &[PayCodeParam]) -> Result<String, String> {
+pub fn create_bip21(params: &[AddressParam]) -> Result<String, String> {
     if params.is_empty() {
         return Err("No payment options provided".into());
     }
@@ -11,16 +11,16 @@ pub fn create_bip21(params: &[PayCodeParam]) -> Result<String, String> {
 
     for param in params {
         match param.kind {
-            PayCodeParamType::LNO => {
+            AddressParamType::LNO => {
                 url.query_pairs_mut().append_pair("lno", &param.value);
             }
-            PayCodeParamType::SP => {
+            AddressParamType::SP => {
                 url.query_pairs_mut().append_pair("sp", &param.value);
             }
-            PayCodeParamType::CREQ => {
+            AddressParamType::CREQ => {
                 url.query_pairs_mut().append_pair("creq", &param.value);
             }
-            PayCodeParamType::CUSTOM => {
+            AddressParamType::CUSTOM => {
                 if let Some(ref prefix) = param.prefix {
                     url.query_pairs_mut().append_pair(prefix, &param.value);
                 }

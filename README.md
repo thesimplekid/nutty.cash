@@ -53,7 +53,7 @@ PAYOUT_CREQ=creqA... # optional, must be amountless
 
 If `PAYOUT_CREQ` is set, Nutty will attempt a best-effort payout after receiving ecash by
 sending the wallet's total current balance to that Cashu payment request. The request must be
-amountless so the runtime can provide the balance dynamically. If the payout fails, the paycode
+amountless so the runtime can provide the balance dynamically. If the payout fails, the address
 creation still succeeds and the ecash remains in the wallet so it can be retried later.
 
 For quick local setups, you can also define the values directly in Nix instead

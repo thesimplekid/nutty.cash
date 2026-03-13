@@ -1,6 +1,6 @@
 use crate::components::header::Header;
 use crate::pages::home::HomePage;
-use crate::pages::new_paycode::NewPayCodePage;
+use crate::pages::new_address::NewAddressPage;
 use crate::pages::success::SuccessPage;
 use crate::api::get_app_config;
 use leptos::prelude::*;
@@ -60,7 +60,7 @@ pub fn App() -> impl IntoView {
                 <main class="flex-grow z-10 relative">
                     <Routes fallback=|| "Page not found.".into_view()>
                         <Route path=StaticSegment("") view=HomePage/>
-                        <Route path=StaticSegment("new") view=NewPayCodePage/>
+                        <Route path=StaticSegment("new") view=NewAddressPage/>
                         <Route path=StaticSegment("search") view=SearchPage/>
                         <Route path=leptos_router::ParamSegment("user") view=SuccessPage/>
                     </Routes>

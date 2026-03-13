@@ -1,4 +1,4 @@
-# Nutty BIP-353 Paycode API
+# Nutty BIP-353 Human Bitcoin Address API
 
 Nutty provides a simple interface and DNS-based resolution for Bitcoin payment addresses (BIP-353). Use this API to register human-readable addresses (e.g., `user@nutty.cash`).
 
@@ -11,9 +11,9 @@ curl -H "accept: application/dns-json" \
      "https://cloudflare-dns.com/dns-query?name=user._bitcoin-payment.example.com&type=TXT"
 ```
 
-## 2. Registering a Paycode
+## 2. Registering an Address
 
-Endpoint: `POST /api/v1/paycode`
+Endpoint: `POST /api/v1/address`
 
 ### Validation Rules
 - **user_name**: Optional. If provided, must be **at least 4 characters** and contains only `a-z`, `A-Z`, `0-9`, `.`, `-`, or `_`.
@@ -29,7 +29,7 @@ Endpoint: `POST /api/v1/paycode`
 Submit the desired name and payment details.
 
 ```bash
-curl -i -X POST https://example.com/api/v1/paycode \
+curl -i -X POST https://example.com/api/v1/address \
      -H "Content-Type: application/json" \
      -d '{
        "user_name": "yourname",
@@ -63,7 +63,7 @@ The user must create a **Cashu Token (NUT-00)** that satisfies the payment reque
 3. Be included in the `X-Cashu` header of a second POST request.
 
 ```bash
-curl -X POST https://example.com/api/v1/paycode \
+curl -X POST https://example.com/api/v1/address \
      -H "Content-Type: application/json" \
      -H "X-Cashu: <cashu_token_v3>" \
      -d '{

@@ -74,13 +74,15 @@ impl AppState {
 
         let cf = Arc::new(CloudflareClient::new(cf_token, domain_map, network_str, app_name.clone()));
 
-        let custom_price_sats = std::env::var("CUSTOM_PRICE_SATS")
+        let custom_price_sats = std::env::var("ADDRESS_PRICE_SATS")
+            .or_else(|_| std::env::var("CUSTOM_PRICE_SATS"))
             .or_else(|_| std::env::var("PAYCODE_PRICE_SATS"))
             .unwrap_or_else(|_| "5000".to_string())
             .parse()
             .unwrap_or(5000);
 
-        let random_price_sats = std::env::var("RANDOM_PRICE_SATS")
+        let random_price_sats = std::env::var("RANDOM_ADDRESS_PRICE_SATS")
+            .or_else(|_| std::env::var("RANDOM_PRICE_SATS"))
             .unwrap_or_else(|_| "0".to_string())
             .parse()
             .unwrap_or(0);

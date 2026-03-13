@@ -2,7 +2,7 @@ use crate::bip21::create_bip21;
 use crate::cashu::normalize_payment_request;
 use crate::server::names::generate_random_name;
 use crate::server::state::AppState;
-use crate::types::{CreatePayCodeRequest, PayCode, PayCodeParam, PayCodeParamType, PayCodeStatus};
+use crate::types::{AddressParam, AddressParamType, AddressStatus, CreateAddressRequest, HumanAddress};
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
@@ -22,10 +22,10 @@ use uuid::Uuid;
 use serde_json::json;
 
 #[instrument(skip(state, headers, payload))]
-pub async fn handle_paycode_api(
+pub async fn handle_address_api(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<CreatePayCodeRequest>,
+    Json(payload): Json<CreateAddressRequest>,
 ) -> Response {
     if let Err(e) = payload.validate() {
         warn!("Invalid request payload: {}", e);
@@ -49,7 +49,7 @@ pub async fn handle_paycode_api(
             // Check availability for chosen name
             let (cf_exists, db_exists) = tokio::join!(
                 state.cf.check_record_exists(&name, &payload.domain),
-                state.db.find_active_paycode(&name, &payload.domain)
+                state.db.find_active_address(&name, &payload.domain)
             );
 
             if cf_exists.unwrap_or(true) || db_exists.unwrap_or(None).is_some() {
@@ -64,7 +64,7 @@ pub async fn handle_paycode_api(
                 name = generate_random_name();
                 let (cf_exists, db_exists) = tokio::join!(
                     state.cf.check_record_exists(&name, &payload.domain),
-                    state.db.find_active_paycode(&name, &payload.domain)
+                    state.db.find_active_address(&name, &payload.domain)
                 );
                 if !cf_exists.unwrap_or(true) && db_exists.unwrap_or(None).is_none() {
                     success = true;
@@ -82,7 +82,7 @@ pub async fn handle_paycode_api(
             .payment_id(Uuid::new_v4().to_string())
             .amount(Amount::from(price_sats))
             .unit(CurrencyUnit::Sat)
-            .description(format!("Purchase paycode: {}@{}", user_name, payload.domain));
+            .description(format!("Purchase address: {}@{}", user_name, payload.domain));
 
         for mint in &state.accepted_mints {
             if let Ok(url) = MintUrl::from_str(mint) {
@@ -134,17 +134,17 @@ pub async fn handle_paycode_api(
 
     let (cf_exists, db_exists) = tokio::join!(
         state.cf.check_record_exists(&user_name, &payload.domain),
-        state.db.find_active_paycode(&user_name, &payload.domain)
+        state.db.find_active_address(&user_name, &payload.domain)
     );
 
     if cf_exists.unwrap_or(true) || db_exists.unwrap_or(None).is_some() {
         return (StatusCode::CONFLICT, Json(json!({"error": "Username taken (just now)"}))).into_response();
     }
 
-    // Build paycode and BIP-21 URI
+    // Build address and BIP-21 URI
     let mut params = Vec::new();
-    if let Some(v) = payload.lno { params.push(PayCodeParam { kind: PayCodeParamType::LNO, value: v, prefix: None }); }
-    if let Some(v) = payload.sp { params.push(PayCodeParam { kind: PayCodeParamType::SP, value: v, prefix: None }); }
+    if let Some(v) = payload.lno { params.push(AddressParam { kind: AddressParamType::LNO, value: v, prefix: None }); }
+    if let Some(v) = payload.sp { params.push(AddressParam { kind: AddressParamType::SP, value: v, prefix: None }); }
     if let Some(v) = payload.creq {
         let normalized_creq = match normalize_payment_request(&v) {
             Ok(normalized_creq) => normalized_creq,
@@ -152,22 +152,22 @@ pub async fn handle_paycode_api(
                 return (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({"error": e}))).into_response();
             }
         };
-        params.push(PayCodeParam { kind: PayCodeParamType::CREQ, value: normalized_creq, prefix: None });
+        params.push(AddressParam { kind: AddressParamType::CREQ, value: normalized_creq, prefix: None });
     }
 
-    let paycode = PayCode {
+    let address = HumanAddress {
         id: Uuid::new_v4(),
         created_at: Utc::now(),
-        status: PayCodeStatus::ACTIVE,
+        status: AddressStatus::ACTIVE,
         user_name,
         domain: payload.domain.clone(),
         params,
     };
 
-    let bip21 = create_bip21(&paycode.params).unwrap_or_default();
+    let bip21 = create_bip21(&address.params).unwrap_or_default();
 
     // Step 1: Create DNS record first (before taking payment)
-    if let Err(e) = state.cf.create_txt_record(&paycode.user_name, &paycode.domain, &bip21).await {
+    if let Err(e) = state.cf.create_txt_record(&address.user_name, &address.domain, &bip21).await {
         error!("Cloudflare record creation failed: {}", e);
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to create DNS record"}))).into_response();
     }
@@ -178,7 +178,7 @@ pub async fn handle_paycode_api(
             Ok(mint_url) => mint_url,
             Err(e) => {
                 error!(error = %e, "Failed to determine token mint URL, rolling back DNS record");
-                if let Err(del_err) = state.cf.delete_txt_record(&paycode.user_name, &paycode.domain).await {
+                if let Err(del_err) = state.cf.delete_txt_record(&address.user_name, &address.domain).await {
                     error!(error = %del_err, "Failed to rollback DNS record");
                 }
                 return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid token mint URL"}))).into_response();
@@ -189,7 +189,7 @@ pub async fn handle_paycode_api(
             Ok(wallet) => wallet,
             Err(e) => {
                 error!(mint = %mint_url, error = %e, "Failed to load wallet for token mint, rolling back DNS record");
-                if let Err(del_err) = state.cf.delete_txt_record(&paycode.user_name, &paycode.domain).await {
+                if let Err(del_err) = state.cf.delete_txt_record(&address.user_name, &address.domain).await {
                     error!(error = %del_err, "Failed to rollback DNS record");
                 }
                 return (StatusCode::BAD_REQUEST, Json(json!({"error": "Mint wallet unavailable"}))).into_response();
@@ -203,7 +203,7 @@ pub async fn handle_paycode_api(
 
         if let Err(e) = res {
             error!("Failed to redeem token: {}, rolling back DNS record", e);
-            if let Err(del_err) = state.cf.delete_txt_record(&paycode.user_name, &paycode.domain).await {
+            if let Err(del_err) = state.cf.delete_txt_record(&address.user_name, &address.domain).await {
                 error!("Failed to rollback DNS record: {}", del_err);
             }
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Payment redemption failed"}))).into_response();
@@ -238,8 +238,8 @@ pub async fn handle_paycode_api(
     }
 
     // Step 3: Save to DB
-    if let Err(e) = state.db.save_paycode(&paycode).await {
-        error!("Failed to save ACTIVE paycode: {}", e);
+    if let Err(e) = state.db.save_address(&address).await {
+        error!("Failed to save ACTIVE address: {}", e);
         // DNS record exists and token is redeemed — log but don't rollback DNS
         // since the user has paid and the record is valid
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
@@ -247,8 +247,8 @@ pub async fn handle_paycode_api(
 
     (StatusCode::OK, Json(json!({
         "status": "active",
-        "user_name": paycode.user_name,
-        "domain": paycode.domain,
-        "bip353": format!("{}@{}", paycode.user_name, paycode.domain)
+        "user_name": address.user_name,
+        "domain": address.domain,
+        "bip353": format!("{}@{}", address.user_name, address.domain)
     }))).into_response()
 }

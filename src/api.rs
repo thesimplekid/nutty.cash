@@ -7,7 +7,9 @@ use bitcoin_payment_instructions::{
     PaymentInstructions, PaymentMethod, PossiblyResolvedPaymentMethod,
 };
 
-use crate::types::{AppConfig, CreatePayCodeRequest, LookupResult, PayCode};
+#[cfg(feature = "ssr")]
+use crate::types::{AddressParam, AddressParamType, AddressStatus};
+use crate::types::{AppConfig, CreateAddressRequest, HumanAddress, LookupResult};
 use leptos::prelude::*;
 #[cfg(feature = "ssr")]
 use std::str::FromStr;
@@ -113,14 +115,13 @@ pub async fn lookup_bip353(address: String) -> Result<LookupResult, ServerFnErro
     }
 }
 
-#[server(name = CreatePaycodeServer)]
-pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode, ServerFnError> {
+#[server(name = CreateAddressServer)]
+pub async fn create_address_server(req: CreateAddressRequest) -> Result<HumanAddress, ServerFnError> {
     #[cfg(feature = "ssr")]
     {
         use crate::bip21::create_bip21;
         use crate::cashu::normalize_payment_request;
         use crate::server::state::AppState;
-        use crate::types::{PayCodeParam, PayCodeParamType, PayCodeStatus};
         use axum::http::HeaderMap;
         use cdk::nuts::nut18::PaymentRequest;
         use chrono::Utc;
@@ -128,7 +129,7 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
         use uuid::Uuid;
 
         let state = use_context::<AppState>().ok_or_else(|| {
-            error!("AppState not found in context during create_paycode_server");
+            error!("AppState not found in context during create_address_server");
             ServerFnError::new("AppState not found in context")
         })?;
 
@@ -138,7 +139,7 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
         })?;
 
         if let Err(e) = req.validate() {
-            warn!(error = %e, "Invalid paycode request validation failed");
+            warn!(error = %e, "Invalid address request validation failed");
             return Err(ServerFnError::new(e));
         }
 
@@ -161,7 +162,7 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
                     name = crate::server::names::generate_random_name();
                     let (cf_exists, db_exists) = tokio::join!(
                         state.cf.check_record_exists(&name, &req.domain),
-                        state.db.find_active_paycode(&name, &req.domain)
+                        state.db.find_active_address(&name, &req.domain)
                     );
                     if !cf_exists.unwrap_or(true) && db_exists.unwrap_or(None).is_none() {
                         success = true;
@@ -180,7 +181,7 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
             if !is_random {
                 let (cf_exists, db_exists) = tokio::join!(
                     state.cf.check_record_exists(&user_name, &req.domain),
-                    state.db.find_active_paycode(&user_name, &req.domain)
+                    state.db.find_active_address(&user_name, &req.domain)
                 );
                 if cf_exists.unwrap_or(true) || db_exists.unwrap_or(None).is_some() {
                     return Err(ServerFnError::new("Username taken"));
@@ -241,7 +242,7 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
             // Re-check availability
             let (cf_exists, db_exists) = tokio::join!(
                 state.cf.check_record_exists(&user_name, &req.domain),
-                state.db.find_active_paycode(&user_name, &req.domain)
+                state.db.find_active_address(&user_name, &req.domain)
             );
 
             if cf_exists.unwrap_or(true) || db_exists.unwrap_or(None).is_some() {
@@ -262,15 +263,15 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
 
         let mut params = Vec::new();
         if let Some(v) = req.lno {
-            params.push(PayCodeParam {
-                kind: PayCodeParamType::LNO,
+            params.push(AddressParam {
+                kind: AddressParamType::LNO,
                 value: v,
                 prefix: None,
             });
         }
         if let Some(v) = req.sp {
-            params.push(PayCodeParam {
-                kind: PayCodeParamType::SP,
+            params.push(AddressParam {
+                kind: AddressParamType::SP,
                 value: v,
                 prefix: None,
             });
@@ -278,23 +279,23 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
         if let Some(v) = req.creq {
             let normalized_creq = normalize_payment_request(&v)
                 .map_err(ServerFnError::new)?;
-            params.push(PayCodeParam {
-                kind: PayCodeParamType::CREQ,
+            params.push(AddressParam {
+                kind: AddressParamType::CREQ,
                 value: normalized_creq,
                 prefix: None,
             });
         }
 
-        let paycode = PayCode {
+        let address = HumanAddress {
             id: Uuid::new_v4(),
             created_at: Utc::now(),
-            status: PayCodeStatus::ACTIVE,
+            status: AddressStatus::ACTIVE,
             user_name,
             domain: req.domain,
             params,
         };
 
-        let bip21 = create_bip21(&paycode.params).map_err(|e| {
+        let bip21 = create_bip21(&address.params).map_err(|e| {
             error!(error = %e, "Failed to build BIP-21 URI");
             ServerFnError::new(e)
         })?;
@@ -302,7 +303,7 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
         // Step 1: Create DNS record first (before taking payment)
         state
             .cf
-            .create_txt_record(&paycode.user_name, &paycode.domain, &bip21)
+            .create_txt_record(&address.user_name, &address.domain, &bip21)
             .await
             .map_err(|e| {
                 error!(error = %e, "Cloudflare API record creation failed");
@@ -334,7 +335,7 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
                 error!(error = %e, "Failed to redeem token, rolling back DNS record");
                 if let Err(del_err) = state
                     .cf
-                    .delete_txt_record(&paycode.user_name, &paycode.domain)
+                    .delete_txt_record(&address.user_name, &address.domain)
                     .await
                 {
                     error!(error = %del_err, "Failed to rollback DNS record");
@@ -364,12 +365,12 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
         }
 
         // Step 3: Save to DB
-        state.db.save_paycode(&paycode).await.map_err(|e| {
-            error!(error = %e, "Failed to save paycode to database");
+        state.db.save_address(&address).await.map_err(|e| {
+            error!(error = %e, "Failed to save address to database");
             ServerFnError::new(e.to_string())
         })?;
 
-        Ok(paycode)
+        Ok(address)
     }
     #[cfg(not(feature = "ssr"))]
     {

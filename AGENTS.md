@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Project Overview
-- `nutty` is a Rust 2021 Leptos application for human-friendly Bitcoin payment addresses and paycode registration.
+- `nutty` is a Rust 2021 Leptos application for human-friendly Bitcoin payment addresses and human address registration.
 - The crate builds both a hydrated WASM frontend and an SSR Axum server; feature flags matter for most commands.
 - Core domains: BIP-353 lookup, BIP-321 URI generation, Cashu payment handling, and Cloudflare DNS record management.
 - Main source roots are `src/`, `style/`, `public/`, plus deployment-oriented Nix files in `flake.nix` and `nix/`.
@@ -75,7 +75,7 @@
 - Keep feature-gated SSR code clearly isolated with `#[cfg(feature = "ssr")]` blocks or modules.
 - Use `snake_case` for functions, variables, modules, and fields.
 - Use `PascalCase` for structs, enums, and Leptos component functions.
-- Keep constants `SCREAMING_SNAKE_CASE`, as seen with `SECONDARY_NAMESPACE`.
+- Keep constants `SCREAMING_SNAKE_CASE`, as seen with `ADDRESS_NAMESPACE`.
 - Prefer owned `String` values in UI and shared payload types when data crosses async or serialization boundaries.
 
 ## Code Style: Imports
@@ -88,9 +88,9 @@
 ## Code Style: Types And Data Modeling
 - Shared request/response types live in `src/types.rs`; extend them there instead of redefining ad hoc payload structs.
 - Derive only what is needed, but `Debug`, `Clone`, `Serialize`, and `Deserialize` are common defaults for shared data.
-- Prefer enums for closed sets of states or kinds, such as `PayCodeStatus` and `PayCodeParamType`.
+- Prefer enums for closed sets of states or kinds, such as `AddressStatus` and `AddressParamType`.
 - Match the project’s existing naming when modifying enums, even if some variants are currently all-caps.
-- Keep validation logic close to the type when practical; `CreatePayCodeRequest::validate()` is the existing pattern.
+- Keep validation logic close to the type when practical; `CreateAddressRequest::validate()` is the existing pattern.
 - Return concrete domain structs from server functions instead of loose JSON blobs when the frontend consumes typed data.
 
 ## Code Style: Leptos And Frontend
@@ -121,10 +121,10 @@
 - Use `expect(...)` only for startup invariants or context that truly must exist, and keep messages specific.
 
 ## Naming Conventions
-- User-facing components use descriptive names like `NewPayCodePage`, `SuccessPage`, and `SearchPage`.
-- Server function names are action-oriented, for example `get_app_config`, `lookup_bip353`, and `create_paycode_server`.
+- User-facing components use descriptive names like `NewAddressPage`, `SuccessPage`, and `SearchPage`.
+- Server function names are action-oriented, for example `get_app_config`, `lookup_bip353`, and `create_address_server`.
 - Keep abbreviations aligned with the Bitcoin domain already used in the repo: `lno`, `sp`, `creq`, `bip21`, `bip353`.
-- Prefer domain language over generic names: use `paycode`, `mint`, `domain`, `wallet`, and `resolution` when appropriate.
+- Prefer domain language over generic names: use `address`, `mint`, `domain`, `wallet`, and `resolution` when appropriate.
 - For callback or signal names in UI, short names like `on_submit`, `error_msg`, and `is_busy` match existing style.
 
 ## Persistence And External Integrations
@@ -139,7 +139,7 @@
 - There is no repo-level `.cursorrules` file.
 - There is no Copilot instruction file at `.github/copilot-instructions.md`.
 - `README.md` documents the NixOS module, secrets, and runtime expectations.
-- `SKILL.md` documents the public paycode API and should stay aligned with API behavior if endpoints change.
+- `SKILL.md` documents the public human address API and should stay aligned with API behavior if endpoints change.
 
 ## Agent Guidance For Safe Changes
 - Check feature flags before concluding code is unused; many modules are only compiled in SSR or hydrate builds.

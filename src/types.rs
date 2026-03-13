@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum PayCodeStatus {
+pub enum AddressStatus {
     PENDING,
     ACTIVE,
     EXPIRED,
@@ -12,7 +12,7 @@ pub enum PayCodeStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PayCodeParamType {
+pub enum AddressParamType {
     LNO,
     SP,
     CREQ,
@@ -20,7 +20,7 @@ pub enum PayCodeParamType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreatePayCodeRequest {
+pub struct CreateAddressRequest {
     pub user_name: Option<String>,
     pub domain: String,
     pub lno: Option<String>,
@@ -28,7 +28,7 @@ pub struct CreatePayCodeRequest {
     pub creq: Option<String>,
 }
 
-impl CreatePayCodeRequest {
+impl CreateAddressRequest {
     pub fn validate(&self) -> Result<(), String> {
         if let Some(ref name) = self.user_name {
             if name.len() < 4 {
@@ -69,20 +69,20 @@ impl CreatePayCodeRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PayCodeParam {
+pub struct AddressParam {
     pub prefix: Option<String>,
     pub value: String,
-    pub kind: PayCodeParamType,
+    pub kind: AddressParamType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PayCode {
+pub struct HumanAddress {
     pub id: Uuid,
     pub created_at: DateTime<Utc>,
-    pub status: PayCodeStatus,
+    pub status: AddressStatus,
     pub user_name: String,
     pub domain: String,
-    pub params: Vec<PayCodeParam>,
+    pub params: Vec<AddressParam>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

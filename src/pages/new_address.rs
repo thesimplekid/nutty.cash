@@ -1,13 +1,13 @@
-use crate::api::CreatePaycodeServer;
+use crate::api::CreateAddressServer;
 use crate::components::button::{Button, ButtonFormat};
 use crate::components::input::Input;
-use crate::types::{AppConfig, CreatePayCodeRequest};
+use crate::types::{AppConfig, CreateAddressRequest};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_navigate;
 
 #[component]
-pub fn NewPayCodePage() -> impl IntoView {
+pub fn NewAddressPage() -> impl IntoView {
     let config = use_context::<Resource<AppConfig>>().expect("AppConfig resource not found");
     let navigate = use_navigate();
     let user_name = RwSignal::new(String::new());
@@ -31,7 +31,7 @@ pub fn NewPayCodePage() -> impl IntoView {
     // Payment required state: (amount, suggested_username, accepted_mints)
     let payment_info = RwSignal::new(None::<(u64, String, Vec<String>)>);
 
-    let create_action = ServerAction::<CreatePaycodeServer>::new();
+    let create_action = ServerAction::<CreateAddressServer>::new();
 
     let navigate_submit = navigate.clone();
     let on_submit = move |_| {
@@ -39,7 +39,7 @@ pub fn NewPayCodePage() -> impl IntoView {
         is_busy.set(true);
         error_msg.set(None);
 
-        let req = CreatePayCodeRequest {
+        let req = CreateAddressRequest {
             user_name: if free_name.get() {
                 payment_info.get().map(|p| p.1).or(None)
             } else {
@@ -74,7 +74,7 @@ pub fn NewPayCodePage() -> impl IntoView {
         let token = cashu_token.get();
         if !token.is_empty() {
             spawn_local(async move {
-                let url = "/api/v1/paycode";
+                let url = "/api/v1/address";
                 let client = gloo_net::http::Request::post(url)
                     .header("X-Cashu", &token)
                     .json(&req);
@@ -113,7 +113,7 @@ pub fn NewPayCodePage() -> impl IntoView {
                 is_busy.set(false);
             });
         } else {
-            create_action.dispatch(CreatePaycodeServer { req });
+            create_action.dispatch(CreateAddressServer { req });
         }
     };
 
@@ -156,7 +156,7 @@ pub fn NewPayCodePage() -> impl IntoView {
     view! {
         <div class="max-w-xl mx-auto py-12 px-6 flex flex-col gap-10 relative z-10">
             <div class="flex flex-col gap-4 text-center">
-                <h2 class="text-4xl font-black text-text-primary tracking-tight">"Get Your Pay Code"</h2>
+                <h2 class="text-4xl font-black text-text-primary tracking-tight">"Get Your Human Bitcoin Address"</h2>
                 <Show when=move || payment_info.get().is_none() fallback=|| ()>
                     <div class="flex gap-2 justify-center">
                         <Button
@@ -194,7 +194,7 @@ pub fn NewPayCodePage() -> impl IntoView {
                                 <div class="max-h-48 overflow-y-auto px-2 flex flex-col gap-3">
                                     {mints.into_iter().map(|mint| view! {
                                         <div class="group relative flex flex-col p-4 bg-black/5 dark:bg-white/5 rounded-xl border border-border-color hover:border-text-primary/30 transition-all overflow-hidden shadow-sm hover:shadow-md">
-                                            <div class="flex items-center gap-2 mb-2">
+                                            <div class="items-center gap-2 mb-2 flex">
                                                 <div class="w-2 h-2 rounded-full bg-text-primary/20 group-hover:bg-text-primary transition-colors"></div>
                                                 <span class="text-[10px] font-black uppercase tracking-widest text-text-secondary">"Cashu Mint"</span>
                                             </div>
@@ -252,7 +252,7 @@ pub fn NewPayCodePage() -> impl IntoView {
                         disabled=Signal::derive(move || is_busy.get())
                         on_click=Callback::new(on_submit)
                     >
-                        {move || if is_busy.get() { "Processing..." } else if payment_info.get().is_some() { "Complete Payment" } else { "Create Pay Code" }}
+                        {move || if is_busy.get() { "Processing..." } else if payment_info.get().is_some() { "Complete Payment" } else { "Create Human Bitcoin Address" }}
                     </Button>
                 </div>
             </div>

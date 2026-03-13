@@ -32,7 +32,7 @@ pub fn HomePage() -> impl IntoView {
             <div class="flex flex-col md:flex-row gap-4 w-full justify-center">
                 <A href="/new">
                     <Button class="w-full md:w-auto px-10 py-5 text-xl".to_string()>
-                        "Get Your Pay Code"
+                        "Get Your Human Address"
                     </Button>
                 </A>
                 <A href="/search">

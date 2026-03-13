@@ -129,13 +129,13 @@ in
     customPriceSats = lib.mkOption {
       type = lib.types.ints.unsigned;
       default = 5000;
-      description = "Price in sats for a custom paycode.";
+      description = "Price in sats for a custom human address.";
     };
 
     randomPriceSats = lib.mkOption {
       type = lib.types.ints.unsigned;
       default = 0;
-      description = "Price in sats for a randomly generated paycode.";
+      description = "Price in sats for a randomly generated human address.";
     };
   };
 

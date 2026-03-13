@@ -54,7 +54,7 @@ pub fn SearchPage() -> impl IntoView {
             <div class="max-w-2xl mx-auto py-20 px-6 flex flex-col gap-8 items-center text-center relative z-10">
                 <div class="flex flex-col gap-4">
                     <h2 class="text-4xl font-black text-text-primary tracking-tight">"Look Up Address"</h2>
-                    <p class="text-text-secondary font-medium">"Search for a BIP-353 pay code to see payment details."</p>
+                    <p class="text-text-secondary font-medium">"Search for a BIP-353 human address to see payment details."</p>
                 </div>
 
                 <div class="w-full flex flex-col gap-6 bg-white/20 dark:bg-bg-secondary/20 p-8 rounded-3xl border-2 border-border-color shadow-xl backdrop-blur-md">
