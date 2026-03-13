@@ -310,13 +310,22 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
         if let Some(token) = validated_token {
             use cdk::wallet::ReceiveOptions;
 
+            let mint_url = token
+                .mint_url()
+                .map_err(|e| ServerFnError::new(format!("Invalid token mint URL: {}", e)))?;
+
+            let wallet = state
+                .sat_wallet_for_mint(&mint_url)
+                .await
+                .map_err(|e| {
+                    error!(mint = %mint_url, error = %e, "Failed to load wallet for token mint");
+                    ServerFnError::new("Mint wallet unavailable")
+                })?;
+
             let start = std::time::Instant::now();
-            let res = state
-                .wallet
-                .receive(&token.to_string(), ReceiveOptions::default())
-                .await;
+            let res = wallet.receive(&token.to_string(), ReceiveOptions::default()).await;
             let duration = start.elapsed();
-            tracing::info!(duration_ms = duration.as_millis(), "Cashu token redemption completed");
+            tracing::info!(mint = %mint_url, duration_ms = duration.as_millis(), "Cashu token redemption completed");
 
             if let Err(e) = res {
                 error!(error = %e, "Failed to redeem token, rolling back DNS record");
@@ -331,22 +340,21 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
             }
 
             if let Some(ref payout_request) = payout_request {
-                match state.wallet.total_balance().await {
+                match wallet.total_balance().await {
                     Ok(payout_amount) if payout_amount > cdk::Amount::ZERO => {
-                        tracing::info!(amount = %payout_amount, "Attempting configured wallet balance payout");
-                        if let Err(e) = state
-                            .wallet
+                        tracing::info!(mint = %mint_url, amount = %payout_amount, "Attempting configured wallet balance payout");
+                        if let Err(e) = wallet
                             .pay_request(payout_request.clone(), Some(payout_amount))
                             .await
                         {
-                            warn!(error = %e, amount = %payout_amount, "Configured payout request payment failed; ecash remains in wallet");
+                            warn!(mint = %mint_url, error = %e, amount = %payout_amount, "Configured payout request payment failed; ecash remains in wallet");
                         } else {
-                            tracing::info!(amount = %payout_amount, "Configured wallet balance payout succeeded");
+                            tracing::info!(mint = %mint_url, amount = %payout_amount, "Configured wallet balance payout succeeded");
                         }
                     }
                     Ok(_) => {}
                     Err(e) => {
-                        warn!(error = %e, "Failed to read wallet balance for configured payout request");
+                        warn!(mint = %mint_url, error = %e, "Failed to read wallet balance for configured payout request");
                     }
                 }
             }

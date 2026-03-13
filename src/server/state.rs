@@ -3,10 +3,10 @@ use crate::server::db::Db;
 use axum::extract::FromRef;
 use bip39::Mnemonic;
 use cdk::mint_url::MintUrl;
-use cdk::nuts::nut18::PaymentRequest;
-use cdk::wallet::Wallet;
-use cdk_sqlite::WalletSqliteDatabase;
 use cdk::nuts::CurrencyUnit;
+use cdk::nuts::nut18::PaymentRequest;
+use cdk::wallet::{Wallet, WalletRepository, WalletRepositoryBuilder};
+use cdk_sqlite::WalletSqliteDatabase;
 use leptos::prelude::LeptosOptions;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -29,7 +29,7 @@ pub struct AppState {
     pub random_price_sats: u64,
     pub accepted_mints: Vec<String>,
     pub leptos_options: LeptosOptions,
-    pub wallet: Arc<Wallet>,
+    pub wallet_repository: Arc<WalletRepository>,
     pub network: bitcoin::Network,
     pub app_name: String,
     pub default_domain: String,
@@ -38,6 +38,16 @@ pub struct AppState {
 }
 
 impl AppState {
+    pub async fn sat_wallet_for_mint(
+        &self,
+        mint_url: &MintUrl,
+    ) -> Result<Wallet, cdk::Error> {
+        Ok(self
+            .wallet_repository
+            .get_wallet(mint_url, &CurrencyUnit::Sat)
+            .await?)
+    }
+
     pub async fn new(leptos_options: LeptosOptions) -> Result<Self, Box<dyn std::error::Error>> {
         dotenvy::dotenv().ok();
 
@@ -112,6 +122,13 @@ impl AppState {
         let wallet_db = Arc::new(wallet_db);
 
         let db = Arc::new(Db::new(wallet_db.clone(), app_name.to_lowercase()));
+        let wallet_repository = Arc::new(
+            WalletRepositoryBuilder::new()
+                .localstore(wallet_db)
+                .seed(seed)
+                .build()
+                .await?,
+        );
 
         let mut accepted_mints = Vec::new();
         let mut rejected_mints = Vec::new();
@@ -131,13 +148,17 @@ impl AppState {
             };
 
             let normalized_mint = mint_url.to_string();
-            let wallet = match Wallet::new(
-                &normalized_mint,
-                CurrencyUnit::Sat,
-                wallet_db.clone(),
-                seed.clone(),
-                None,
-            ) {
+            if let Err(e) = wallet_repository.add_wallet(mint_url.clone()).await {
+                rejected_mints.push(RejectedMint {
+                    mint: normalized_mint.clone(),
+                    reason: "wallet_init_failed",
+                    error: e.to_string(),
+                });
+                warn!(mint = %normalized_mint, error = %e, "Skipping accepted mint because wallet initialization failed");
+                continue;
+            }
+
+            let wallet = match wallet_repository.get_wallet(&mint_url, &CurrencyUnit::Sat).await {
                 Ok(wallet) => wallet,
                 Err(e) => {
                     rejected_mints.push(RejectedMint {
@@ -191,14 +212,6 @@ impl AppState {
             "Validated accepted mints at startup"
         );
 
-        let wallet = Wallet::new(
-            &accepted_mints[0], // Primary mint URL
-            CurrencyUnit::Sat,
-            wallet_db,
-            seed,
-            None,
-        )?;
-
         Ok(Self {
             db,
             cf,
@@ -206,7 +219,7 @@ impl AppState {
             random_price_sats,
             accepted_mints,
             leptos_options,
-            wallet: Arc::new(wallet),
+            wallet_repository,
             network,
             app_name,
             default_domain,

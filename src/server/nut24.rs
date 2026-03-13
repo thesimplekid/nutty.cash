@@ -165,10 +165,32 @@ pub async fn handle_paycode_api(
 
     // Step 2: Redeem token (DNS record exists, so rollback on failure)
     if let Some(token) = cashu_token {
+        let mint_url = match token.mint_url() {
+            Ok(mint_url) => mint_url,
+            Err(e) => {
+                error!(error = %e, "Failed to determine token mint URL, rolling back DNS record");
+                if let Err(del_err) = state.cf.delete_txt_record(&paycode.user_name, &paycode.domain).await {
+                    error!(error = %del_err, "Failed to rollback DNS record");
+                }
+                return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid token mint URL"}))).into_response();
+            }
+        };
+
+        let wallet = match state.sat_wallet_for_mint(&mint_url).await {
+            Ok(wallet) => wallet,
+            Err(e) => {
+                error!(mint = %mint_url, error = %e, "Failed to load wallet for token mint, rolling back DNS record");
+                if let Err(del_err) = state.cf.delete_txt_record(&paycode.user_name, &paycode.domain).await {
+                    error!(error = %del_err, "Failed to rollback DNS record");
+                }
+                return (StatusCode::BAD_REQUEST, Json(json!({"error": "Mint wallet unavailable"}))).into_response();
+            }
+        };
+
         let start = std::time::Instant::now();
-        let res = state.wallet.receive(&token.to_string(), ReceiveOptions::default()).await;
+        let res = wallet.receive(&token.to_string(), ReceiveOptions::default()).await;
         let duration = start.elapsed();
-        tracing::info!(duration_ms = duration.as_millis(), "Cashu token redemption completed");
+        tracing::info!(mint = %mint_url, duration_ms = duration.as_millis(), "Cashu token redemption completed");
 
         if let Err(e) = res {
             error!("Failed to redeem token: {}, rolling back DNS record", e);
@@ -181,22 +203,21 @@ pub async fn handle_paycode_api(
         if let Some(payout_creq) = state.payout_creq.as_deref() {
             match PaymentRequest::from_str(payout_creq) {
                 Ok(payout_request) => {
-                    match state.wallet.total_balance().await {
+                    match wallet.total_balance().await {
                         Ok(payout_amount) if payout_amount > Amount::ZERO => {
-                            tracing::info!(amount = %payout_amount, "Attempting configured wallet balance payout");
-                            if let Err(e) = state
-                                .wallet
+                            tracing::info!(mint = %mint_url, amount = %payout_amount, "Attempting configured wallet balance payout");
+                            if let Err(e) = wallet
                                 .pay_request(payout_request, Some(payout_amount))
                                 .await
                             {
-                                warn!(error = %e, amount = %payout_amount, "Configured payout request payment failed; ecash remains in wallet");
+                                warn!(mint = %mint_url, error = %e, amount = %payout_amount, "Configured payout request payment failed; ecash remains in wallet");
                             } else {
-                                tracing::info!(amount = %payout_amount, "Configured wallet balance payout succeeded");
+                                tracing::info!(mint = %mint_url, amount = %payout_amount, "Configured wallet balance payout succeeded");
                             }
                         }
                         Ok(_) => {}
                         Err(e) => {
-                            warn!(error = %e, "Failed to read wallet balance for configured payout request");
+                            warn!(mint = %mint_url, error = %e, "Failed to read wallet balance for configured payout request");
                         }
                     }
                 }
