@@ -8,7 +8,7 @@ To resolve a Bitcoin human-readable address to a BIP-21 URI:
 
 ```bash
 curl -H "accept: application/dns-json" \
-     "https://cloudflare-dns.com/dns-query?name=user._bitcoin-payment.example.com&type=TXT"
+     "https://cloudflare-dns.com/dns-query?name=user.user._bitcoin-payment.example.com&type=TXT"
 ```
 
 ## 2. Registering an Address

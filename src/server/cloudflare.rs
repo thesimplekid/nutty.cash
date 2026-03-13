@@ -17,6 +17,14 @@ impl CloudflareClient {
         Self { token, domain_map, network, client, app_name }
     }
 
+    fn get_full_record_name(&self, user_name: &str, domain: &str) -> String {
+        if self.network.is_empty() || self.network == "bitcoin" {
+            format!("{}.user._bitcoin-payment.{}", user_name, domain)
+        } else {
+            format!("{}.user._bitcoin-payment.{}.{}", user_name, self.network, domain)
+        }
+    }
+
     #[instrument(skip(self), fields(user_name = %user_name, domain = %domain))]
     pub async fn check_record_exists(&self, user_name: &str, domain: &str) -> Result<bool, String> {
         let zone_id = self.domain_map.get(domain).ok_or_else(|| {
@@ -25,11 +33,7 @@ impl CloudflareClient {
             err
         })?;
         
-        let full_name = if self.network.is_empty() {
-            format!("{}.user._bitcoin-payment.{}", user_name, domain)
-        } else {
-            format!("{}.user._bitcoin-payment.{}.{}", user_name, self.network, domain)
-        };
+        let full_name = self.get_full_record_name(user_name, domain);
 
         let url = format!("https://api.cloudflare.com/client/v4/zones/{}/dns_records?name={}&type=TXT", zone_id, full_name);
         
@@ -78,16 +82,12 @@ impl CloudflareClient {
             err
         })?;
         
-        let full_name = if self.network.is_empty() {
-            format!("{}.user._bitcoin-payment.{}", user_name, domain)
-        } else {
-            format!("{}.user._bitcoin-payment.{}.{}", user_name, self.network, domain)
-        };
+        let full_name = self.get_full_record_name(user_name, domain);
 
         let url = format!("https://api.cloudflare.com/client/v4/zones/{}/dns_records", zone_id);
         
         let body = json!({
-            "content": content,
+            "content": format!("\"{}\"", content),
             "name": full_name,
             "proxied": false,
             "type": "TXT",
@@ -130,11 +130,7 @@ impl CloudflareClient {
             err
         })?;
 
-        let full_name = if self.network.is_empty() {
-            format!("{}.user._bitcoin-payment.{}", user_name, domain)
-        } else {
-            format!("{}.user._bitcoin-payment.{}.{}", user_name, self.network, domain)
-        };
+        let full_name = self.get_full_record_name(user_name, domain);
 
         // First, find the record ID
         let list_url = format!(
