@@ -215,9 +215,9 @@ pub fn NewPayCodePage() -> impl IntoView {
 
                     <Input
                         label="Cashu Payment Request"
-                        placeholder="creqb1..."
+                        placeholder="creqA... or creqB..."
                         value=creq
-                        description="Cashu (NUT-26) payment request"
+                        description="Cashu payment request; creqA and creqB are both accepted"
                     />
 
                     <Input

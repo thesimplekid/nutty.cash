@@ -1,3 +1,4 @@
+use crate::cashu::normalize_payment_request;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -58,9 +59,9 @@ impl CreatePayCodeRequest {
         }
 
         if let Some(ref creq) = self.creq {
-            if !creq.to_lowercase().starts_with("creqb1") {
-                return Err("Cashu payment request must start with 'creqb1'".into());
-            }
+            normalize_payment_request(creq)
+                .map(|_| ())
+                .map_err(|_| "Cashu payment request must be a valid payment request".to_string())?;
         }
 
         Ok(())

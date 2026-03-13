@@ -2,6 +2,7 @@
 pub mod api;
 pub mod app;
 pub mod bip21;
+pub mod cashu;
 pub mod components;
 pub mod pages;
 #[cfg(feature = "ssr")]

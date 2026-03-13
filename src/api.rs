@@ -118,6 +118,7 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
     #[cfg(feature = "ssr")]
     {
         use crate::bip21::create_bip21;
+        use crate::cashu::normalize_payment_request;
         use crate::server::state::AppState;
         use crate::types::{PayCodeParam, PayCodeParamType, PayCodeStatus};
         use axum::http::HeaderMap;
@@ -275,9 +276,11 @@ pub async fn create_paycode_server(req: CreatePayCodeRequest) -> Result<PayCode,
             });
         }
         if let Some(v) = req.creq {
+            let normalized_creq = normalize_payment_request(&v)
+                .map_err(ServerFnError::new)?;
             params.push(PayCodeParam {
                 kind: PayCodeParamType::CREQ,
-                value: v,
+                value: normalized_creq,
                 prefix: None,
             });
         }

@@ -1,4 +1,5 @@
 use crate::bip21::create_bip21;
+use crate::cashu::normalize_payment_request;
 use crate::server::names::generate_random_name;
 use crate::server::state::AppState;
 use crate::types::{CreatePayCodeRequest, PayCode, PayCodeParam, PayCodeParamType, PayCodeStatus};
@@ -144,7 +145,15 @@ pub async fn handle_paycode_api(
     let mut params = Vec::new();
     if let Some(v) = payload.lno { params.push(PayCodeParam { kind: PayCodeParamType::LNO, value: v, prefix: None }); }
     if let Some(v) = payload.sp { params.push(PayCodeParam { kind: PayCodeParamType::SP, value: v, prefix: None }); }
-    if let Some(v) = payload.creq { params.push(PayCodeParam { kind: PayCodeParamType::CREQ, value: v, prefix: None }); }
+    if let Some(v) = payload.creq {
+        let normalized_creq = match normalize_payment_request(&v) {
+            Ok(normalized_creq) => normalized_creq,
+            Err(e) => {
+                return (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({"error": e}))).into_response();
+            }
+        };
+        params.push(PayCodeParam { kind: PayCodeParamType::CREQ, value: normalized_creq, prefix: None });
+    }
 
     let paycode = PayCode {
         id: Uuid::new_v4(),
