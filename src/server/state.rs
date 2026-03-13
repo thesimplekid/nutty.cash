@@ -1,15 +1,25 @@
 use crate::server::cloudflare::CloudflareClient;
 use crate::server::db::Db;
 use axum::extract::FromRef;
+use bip39::Mnemonic;
+use cdk::mint_url::MintUrl;
 use cdk::nuts::nut18::PaymentRequest;
-use leptos::prelude::LeptosOptions;
-use std::collections::HashMap;
-use std::sync::Arc;
 use cdk::wallet::Wallet;
 use cdk_sqlite::WalletSqliteDatabase;
-use bip39::Mnemonic;
 use cdk::nuts::CurrencyUnit;
+use leptos::prelude::LeptosOptions;
+use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
+use tracing::{info, warn};
+
+#[allow(dead_code)]
+#[derive(Debug)]
+struct RejectedMint {
+    mint: String,
+    reason: &'static str,
+    error: String,
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -65,7 +75,7 @@ impl AppState {
             .parse()
             .unwrap_or(0);
 
-        let accepted_mints: Vec<String> = std::env::var("ACCEPTED_MINTS")
+        let configured_mints: Vec<String> = std::env::var("ACCEPTED_MINTS")
             .unwrap_or_default()
             .split(',')
             .map(|s| s.trim().to_string())
@@ -86,9 +96,11 @@ impl AppState {
             }
         }
 
-        if accepted_mints.is_empty() {
+        if configured_mints.is_empty() {
             return Err("ACCEPTED_MINTS must be set".into());
         }
+
+        info!(configured_mints = ?configured_mints, "Loaded configured accepted mints from environment");
 
         let mnemonic_str = std::env::var("CDK_MNEMONIC").map_err(|_| "CDK_MNEMONIC not set")?;
         let mnemonic = Mnemonic::from_str(&mnemonic_str)?;
@@ -100,6 +112,84 @@ impl AppState {
         let wallet_db = Arc::new(wallet_db);
 
         let db = Arc::new(Db::new(wallet_db.clone(), app_name.to_lowercase()));
+
+        let mut accepted_mints = Vec::new();
+        let mut rejected_mints = Vec::new();
+
+        for configured_mint in &configured_mints {
+            let mint_url = match MintUrl::from_str(&configured_mint) {
+                Ok(mint_url) => mint_url,
+                Err(e) => {
+                    rejected_mints.push(RejectedMint {
+                        mint: configured_mint.clone(),
+                        reason: "invalid_url",
+                        error: e.to_string(),
+                    });
+                    warn!(mint = %configured_mint, error = %e, "Skipping invalid accepted mint URL");
+                    continue;
+                }
+            };
+
+            let normalized_mint = mint_url.to_string();
+            let wallet = match Wallet::new(
+                &normalized_mint,
+                CurrencyUnit::Sat,
+                wallet_db.clone(),
+                seed.clone(),
+                None,
+            ) {
+                Ok(wallet) => wallet,
+                Err(e) => {
+                    rejected_mints.push(RejectedMint {
+                        mint: normalized_mint.clone(),
+                        reason: "wallet_init_failed",
+                        error: e.to_string(),
+                    });
+                    warn!(mint = %normalized_mint, error = %e, "Skipping accepted mint because wallet initialization failed");
+                    continue;
+                }
+            };
+
+            if let Err(e) = wallet.fetch_mint_info().await {
+                rejected_mints.push(RejectedMint {
+                    mint: normalized_mint.clone(),
+                    reason: "mint_info_failed",
+                    error: e.to_string(),
+                });
+                warn!(mint = %normalized_mint, error = %e, "Skipping accepted mint because mint info lookup failed");
+                continue;
+            }
+
+            match wallet.recover_incomplete_sagas().await {
+                Ok(recovery) => {
+                    info!(mint = %normalized_mint, pending = ?recovery, "Recovered incomplete wallet sagas for accepted mint");
+                }
+                Err(e) => {
+                    rejected_mints.push(RejectedMint {
+                        mint: normalized_mint.clone(),
+                        reason: "recovery_failed",
+                        error: e.to_string(),
+                    });
+                    warn!(mint = %normalized_mint, error = %e, "Skipping accepted mint because wallet recovery failed");
+                    continue;
+                }
+            }
+
+            accepted_mints.push(normalized_mint);
+        }
+
+        if accepted_mints.is_empty() {
+            return Err("No working ACCEPTED_MINTS remain after validation".into());
+        }
+
+        info!(
+            configured_mints = ?configured_mints,
+            accepted_mints = ?accepted_mints,
+            rejected_mints = ?rejected_mints,
+            accepted_count = accepted_mints.len(),
+            rejected_count = rejected_mints.len(),
+            "Validated accepted mints at startup"
+        );
 
         let wallet = Wallet::new(
             &accepted_mints[0], // Primary mint URL

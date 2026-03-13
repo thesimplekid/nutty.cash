@@ -89,6 +89,16 @@ in
       description = "Bitcoin network name passed to the application.";
     };
 
+    rustLog = lib.mkOption {
+      type = lib.types.str;
+      default = "info";
+      example = "info,nutty=debug,cdk=debug";
+      description = ''
+        Value for the `RUST_LOG` environment variable used by the tracing
+        subscriber.
+      '';
+    };
+
     acceptedMints = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
@@ -162,6 +172,7 @@ in
         DEFAULT_DOMAIN = cfg.defaultDomain;
         APP_URL = cfg.appUrl;
         NETWORK = cfg.network;
+        RUST_LOG = cfg.rustLog;
         ACCEPTED_MINTS = acceptedMints;
         DOMAINS = domainsJson;
         CUSTOM_PRICE_SATS = toString cfg.customPriceSats;
