@@ -17,8 +17,9 @@ async fn main() {
         .init();
 
     let conf = get_configuration(None).unwrap();
-    let addr = conf.leptos_options.site_addr;
     let leptos_options = conf.leptos_options;
+    let addr = std::env::var("SITE_ADDR")
+        .unwrap_or_else(|_| leptos_options.site_addr.to_string());
 
     let state = AppState::new(leptos_options.clone())
         .await
